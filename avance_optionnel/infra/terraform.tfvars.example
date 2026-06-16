@@ -1,0 +1,10 @@
+# Copie ce fichier en "terraform.tfvars" et adapte les valeurs.
+# (terraform.tfvars n'est pas versionné s'il contient des secrets.)
+
+alert_email    = "ton.email@exemple.com"   # OBLIGATOIRE — recevra les alertes (à confirmer)
+aws_region     = "eu-west-3"               # Paris
+project_prefix = "nyc-taxi-pipeline"
+tlc_months     = "2024-01"                 # démo rapide = 1 mois (~3M lignes)
+pseudo_salt    = "mets-un-secret-ici"
+ml_sample_rows = "200000"
+enable_schedule = false                    # true = run quotidien automatique

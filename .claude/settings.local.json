@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($tools = \"python\",\"py\",\"pip\",\"docker\",\"terraform\",\"aws\",\"git\",\"duckdb\"; foreach \\($t in $tools\\) { $c = Get-Command $t -ErrorAction SilentlyContinue; if \\($c\\) { \"$t : $\\($c.Source\\)\" } else { \"$t : ABSENT\" } }; \"----- versions -----\"; try { \"python: \" + \\(python --version 2>&1\\) } catch {}; try { \"pip: \" + \\(pip --version 2>&1\\) } catch {})",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe run_local_pipeline.py 2024-01)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"import sys; sys.argv=['x']; from api.app import top_zones, tips, predictions, ml_metrics; import json; print\\('TOP ZONES:'\\); print\\(json.dumps\\(top_zones\\(3\\), indent=2, default=str\\)\\); print\\('TIPS \\(1\\):'\\); print\\(json.dumps\\(tips\\(\\)[:1], indent=2, default=str\\)\\); print\\('ML METRICS:'\\); m=ml_metrics\\(\\); print\\('R2=', m['model_metrics']['r2'], 'gain%=', m['improvement_mae_pct'], 'top feat=', list\\(m['feature_importance'].items\\(\\)\\)[0]\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe _tmp_test_dash.py)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe _tmp_schema.py)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}

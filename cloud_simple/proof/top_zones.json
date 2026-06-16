@@ -1,0 +1,62 @@
+[
+  {
+    "pu_borough": "Queens",
+    "pu_zone": "JFK Airport",
+    "trips": "135553",
+    "revenu": "1.1000482E7"
+  },
+  {
+    "pu_borough": "Queens",
+    "pu_zone": "LaGuardia Airport",
+    "trips": "86312",
+    "revenu": "5729778.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Midtown Center",
+    "trips": "134665",
+    "revenu": "3225002.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Upper East Side South",
+    "trips": "135172",
+    "revenu": "2666205.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Times Sq/Theatre District",
+    "trips": "98630",
+    "revenu": "2644635.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Upper East Side North",
+    "trips": "127748",
+    "revenu": "2574064.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Penn Station/Madison Sq West",
+    "trips": "99256",
+    "revenu": "2389821.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Midtown East",
+    "trips": "101039",
+    "revenu": "2354199.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Lincoln Square East",
+    "trips": "97374",
+    "revenu": "2067748.0"
+  },
+  {
+    "pu_borough": "Manhattan",
+    "pu_zone": "Midtown North",
+    "trips": "80516",
+    "revenu": "1894148.0"
+  }
+]

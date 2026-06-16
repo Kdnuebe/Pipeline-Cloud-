@@ -1,0 +1,47 @@
+openapi: 3.0.3
+info:
+  title: NYC Taxi — API Datamarts Gold
+  version: 1.0.0
+  description: >
+    API REST exposant les datamarts de la couche gold (architecture médaillon
+    Bronze→Silver→Gold sur AWS). Lecture via Amazon Athena. Aucune donnée
+    directement identifiante n'est exposée (RGPD : k-anonymat appliqué en gold).
+servers:
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com
+    variables:
+      apiId: { default: "xxxxxxxx" }
+      region: { default: "eu-west-3" }
+paths:
+  /health:
+    get:
+      summary: Vérifie que l'API répond
+      responses: { "200": { description: OK } }
+  /zones/top:
+    get:
+      summary: Top des zones de prise en charge par revenu (problématique #1)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 10, maximum: 100 } }
+      responses: { "200": { description: Liste des zones triées par revenu } }
+  /demand:
+    get:
+      summary: Demande par zone × heure × jour (problématique #1)
+      parameters:
+        - { name: borough, in: query, schema: { type: string } }
+        - { name: hour, in: query, schema: { type: integer, minimum: 0, maximum: 23 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
+      responses: { "200": { description: Lignes de demande } }
+  /tips:
+    get:
+      summary: Analyse des pourboires (problématique #2)
+      responses: { "200": { description: Taux de pourboire par segment } }
+  /predictions:
+    get:
+      summary: Prédictions ML & anomalies exposées en gold (problématique #3)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 1000 } }
+        - { name: anomalies_only, in: query, schema: { type: boolean, default: false } }
+      responses: { "200": { description: Réel vs prédit + drapeau anomalie } }
+  /ml/metrics:
+    get:
+      summary: Métriques du modèle ML vs baseline
+      responses: { "200": { description: MAE/RMSE/R² + importances } }

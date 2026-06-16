@@ -1,0 +1,86 @@
+{
+  "Comment": "Pipeline médaillon NYC Taxi : Crawler bronze -> Transform (Athena) -> Qualité -> ML. Alerte SNS sur échec.",
+  "StartAt": "StartCrawler",
+  "States": {
+    "StartCrawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:startCrawler",
+      "Parameters": { "Name": "${crawler_name}" },
+      "Catch": [
+        { "ErrorEquals": ["Glue.CrawlerRunningException"], "Next": "WaitCrawler" },
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "WaitCrawler"
+    },
+    "WaitCrawler": {
+      "Type": "Wait",
+      "Seconds": 20,
+      "Next": "GetCrawler"
+    },
+    "GetCrawler": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::aws-sdk:glue:getCrawler",
+      "Parameters": { "Name": "${crawler_name}" },
+      "ResultPath": "$.crawler",
+      "Next": "CrawlerReady?"
+    },
+    "CrawlerReady?": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.crawler.Crawler.State", "StringEquals": "READY", "Next": "Transform" }
+      ],
+      "Default": "WaitCrawler"
+    },
+    "Transform": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${transform_job}" },
+      "Retry": [
+        { "ErrorEquals": ["Glue.ConcurrentRunsExceededException"], "IntervalSeconds": 30, "MaxAttempts": 3, "BackoffRate": 2.0 }
+      ],
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "Quality"
+    },
+    "Quality": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${quality_job}" },
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "ML"
+    },
+    "ML": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": { "JobName": "${ml_job}" },
+      "Retry": [
+        { "ErrorEquals": ["Glue.ConcurrentRunsExceededException"], "IntervalSeconds": 30, "MaxAttempts": 3, "BackoffRate": 2.0 }
+      ],
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed"
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${sns_topic_arn}",
+        "Subject": "[ALERTE] Pipeline NYC Taxi en échec",
+        "Message.$": "States.Format('La pipeline NYC Taxi a échoué. Détail: {}', States.JsonToString($.error))"
+      },
+      "Next": "FailState"
+    },
+    "FailState": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "Une étape de la pipeline a échoué (voir l'alerte SNS et CloudWatch Logs)."
+    }
+  }
+}

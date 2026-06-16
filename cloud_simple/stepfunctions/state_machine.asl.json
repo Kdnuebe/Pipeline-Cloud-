@@ -1,0 +1,66 @@
+{
+  "Comment": "Orchestration SIMPLE des transformations Athena (silver -> gold). Aucune Lambda ni Glue : Step Functions appelle Athena nativement. Avant de lancer : les tables bronze_* doivent exister (script 01_create_bronze_tables.sql) et les dossiers silver/ + gold/ doivent etre vides. Remplacer VOTRE-BUCKET et VOTRE_SNS_TOPIC_ARN.",
+  "StartAt": "BuildSilver",
+  "States": {
+    "BuildSilver": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryExecutionContext": { "Database": "nyc_taxi" },
+        "ResultConfiguration": { "OutputLocation": "s3://VOTRE-BUCKET/athena-results/" },
+        "QueryString": "CREATE TABLE silver_trips WITH (format='PARQUET', external_location='s3://VOTRE-BUCKET/silver/trips/') AS SELECT t.vendorid AS vendor_id, t.tpep_pickup_datetime AS pickup_ts, t.tpep_dropoff_datetime AS dropoff_ts, CAST(t.tpep_pickup_datetime AS DATE) AS pickup_date, EXTRACT(HOUR FROM t.tpep_pickup_datetime) AS pickup_hour, EXTRACT(DOW FROM t.tpep_pickup_datetime) AS pickup_dow_iso, CASE WHEN EXTRACT(DOW FROM t.tpep_pickup_datetime) >= 6 THEN TRUE ELSE FALSE END AS is_weekend, CASE WHEN EXTRACT(HOUR FROM t.tpep_pickup_datetime) BETWEEN 7 AND 9 OR EXTRACT(HOUR FROM t.tpep_pickup_datetime) BETWEEN 16 AND 19 THEN TRUE ELSE FALSE END AS is_rush_hour, CAST(t.passenger_count AS INTEGER) AS passenger_count, t.trip_distance, date_diff('minute', t.tpep_pickup_datetime, t.tpep_dropoff_datetime) AS trip_duration_min, t.pulocationid AS pu_location_id, t.dolocationid AS do_location_id, pz.borough AS pu_borough, pz.zone_name AS pu_zone, dz.borough AS do_borough, dz.zone_name AS do_zone, CAST(t.payment_type AS INTEGER) AS payment_type, t.fare_amount, t.tip_amount, t.total_amount, CASE WHEN t.fare_amount > 0 THEN ROUND(100.0 * t.tip_amount / t.fare_amount, 2) END AS tip_pct, w.temperature_2m_mean AS temp_mean_c, w.temperature_2m_max AS temp_max_c, w.precipitation_sum AS precip_mm, t.driver_pseudo AS driver_pseudo FROM bronze_trips t LEFT JOIN bronze_zones pz ON t.pulocationid = pz.location_id LEFT JOIN bronze_zones dz ON t.dolocationid = dz.location_id LEFT JOIN bronze_weather w ON CAST(t.tpep_pickup_datetime AS DATE) = CAST(w.weather_date AS DATE) WHERE t.tpep_pickup_datetime IS NOT NULL AND t.tpep_dropoff_datetime > t.tpep_pickup_datetime AND t.trip_distance > 0 AND t.trip_distance < 200 AND t.fare_amount >= 0 AND t.total_amount >= 0 AND t.passenger_count BETWEEN 1 AND 8 AND date_diff('minute', t.tpep_pickup_datetime, t.tpep_dropoff_datetime) BETWEEN 1 AND 240"
+      },
+      "Retry": [
+        { "ErrorEquals": ["Athena.TooManyRequestsException", "Athena.InternalServerException"], "IntervalSeconds": 10, "MaxAttempts": 3, "BackoffRate": 2.0 }
+      ],
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "BuildGoldDemand"
+    },
+    "BuildGoldDemand": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryExecutionContext": { "Database": "nyc_taxi" },
+        "ResultConfiguration": { "OutputLocation": "s3://VOTRE-BUCKET/athena-results/" },
+        "QueryString": "CREATE TABLE demand_by_zone_hour WITH (format='PARQUET', external_location='s3://VOTRE-BUCKET/gold/demand_by_zone_hour/') AS SELECT pu_borough, pu_zone, pickup_hour, pickup_dow_iso, COUNT(*) AS trips, ROUND(SUM(total_amount), 2) AS revenue_total, ROUND(AVG(total_amount), 2) AS avg_ticket, ROUND(AVG(trip_distance), 2) AS avg_distance_mi, ROUND(AVG(trip_duration_min), 1) AS avg_duration_min FROM silver_trips WHERE pu_borough IS NOT NULL GROUP BY pu_borough, pu_zone, pickup_hour, pickup_dow_iso HAVING COUNT(*) >= 5"
+      },
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "BuildGoldTips"
+    },
+    "BuildGoldTips": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryExecutionContext": { "Database": "nyc_taxi" },
+        "ResultConfiguration": { "OutputLocation": "s3://VOTRE-BUCKET/athena-results/" },
+        "QueryString": "CREATE TABLE tips_analysis WITH (format='PARQUET', external_location='s3://VOTRE-BUCKET/gold/tips_analysis/') AS SELECT pu_borough, payment_type, is_rush_hour, CASE WHEN precip_mm > 0 THEN TRUE ELSE FALSE END AS is_rainy, COUNT(*) AS trips, ROUND(AVG(tip_pct), 2) AS avg_tip_pct, ROUND(AVG(tip_amount), 2) AS avg_tip_amount, ROUND(AVG(total_amount), 2) AS avg_ticket FROM silver_trips WHERE tip_pct IS NOT NULL AND pu_borough IS NOT NULL GROUP BY pu_borough, payment_type, is_rush_hour, CASE WHEN precip_mm > 0 THEN TRUE ELSE FALSE END HAVING COUNT(*) >= 5"
+      },
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "NotifyFailure" }
+      ],
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed"
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "VOTRE_SNS_TOPIC_ARN",
+        "Subject": "[ALERTE] Pipeline NYC Taxi (Step Functions) en echec",
+        "Message.$": "States.Format('Une etape Athena a echoue. Detail: {}', States.JsonToString($.error))"
+      },
+      "Next": "Fail"
+    },
+    "Fail": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "Une transformation Athena a echoue (voir l'alerte SNS et l'historique d'execution)."
+    }
+  }
+}

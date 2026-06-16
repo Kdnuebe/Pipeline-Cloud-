@@ -1,0 +1,44 @@
+%% Architecture SIMPLE — Pipeline Médaillon NYC Taxi (S3 + Athena)
+%% Visualiser sur https://mermaid.live ou l'extension Mermaid de VS Code.
+flowchart TD
+    subgraph SRC[Sources open data]
+        A1[NYC TLC Yellow Taxi<br/>~3M lignes/mois]
+        A2[Taxi Zones<br/>CSV]
+        A3[Open-Meteo<br/>API météo]
+    end
+
+    subgraph LOCAL[Traitement local - Python, gratuit]
+        P1[run_local_pipeline.py<br/>ingestion + ML]
+    end
+
+    subgraph CLOUD[AWS - 2 services simples]
+        B1[(S3 bronze/<br/>Parquet, chiffré)]
+        ATH{{Amazon Athena<br/>SQL distribué serverless}}
+        S1[(S3 silver/trips)]
+        G1[(S3 gold/<br/>demand_by_zone_hour<br/>tips_analysis · k-anonymat)]
+        G3[(S3 gold/ml_predictions)]
+    end
+
+    subgraph EXPO[Exposition - en local]
+        E1[API REST FastAPI<br/>+ Swagger]
+        E2[Dashboard Streamlit]
+    end
+
+    A1 --> P1
+    A2 --> P1
+    A3 --> P1
+    P1 -->|upload S3| B1
+    P1 -->|prédictions ML| G3
+    B1 -->|SQL CTAS nettoyage+jointures+RGPD| ATH
+    ATH --> S1
+    S1 -->|SQL CTAS agrégats| ATH
+    ATH --> G1
+    G1 --> E1
+    G3 --> E1
+    G1 --> E2
+    G3 --> E2
+
+    SFN[[AWS Step Functions<br/>orchestre Silver→Gold<br/>retry + alerte SNS]] -.orchestre.-> ATH
+    QA[/Tests qualité - checks.py/] -.contrôle.-> S1
+    COST[/FinOps: Data scanned + Cost Explorer/] -.observe.-> ATH
+    SNS[(SNS email)] -.alerte si échec.- SFN

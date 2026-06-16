@@ -1,0 +1,27 @@
+# Intégration continue (Bloc 2) — exécutée automatiquement par GitHub à chaque "push".
+# Vérifie que le code compile et que les tests qualité passent.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Vérifier que tout le code compile
+        run: python -m py_compile pipeline_common.py run_local_pipeline.py data_ingestion/ingest.py transformations/run_local.py quality/checks.py ml/train_score.py api/app.py dashboard/app.py finops/cost_calculator.py
+
+      - name: Lancer les tests qualité automatisés
+        run: python tests/test_quality.py

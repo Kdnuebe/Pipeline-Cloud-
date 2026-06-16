@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# Dépendances Python du projet (cœur, fonctionne en local ET sur AWS Glue)
+# Installer dans un environnement virtuel :  python -m venv .venv ...
+# ---------------------------------------------------------------------------
+duckdb>=1.1.0          # moteur SQL local (joue le rôle d'Athena en dev, gratuit)
+pandas>=2.2.0          # manipulation de données
+pyarrow>=16.0.0        # lecture/écriture Parquet (local + S3)
+requests>=2.32.0       # téléchargement des fichiers TLC + appel API météo
+scikit-learn>=1.5.0    # modèles ML (RandomForest, IsolationForest)
+numpy>=1.26.0
+boto3>=1.34.0          # SDK AWS (utilisé par les scripts cloud)
+python-dotenv>=1.0.0   # lecture du fichier .env
+
+# --- API REST (couche gold) ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+mangum>=0.18.0         # adaptateur FastAPI -> AWS Lambda
+
+# --- Dashboard (couche gold) ---
+streamlit>=1.38.0
+plotly>=5.24.0
+
+# --- Optionnels (voir requirements-extra.txt) : great-expectations, mlflow ---

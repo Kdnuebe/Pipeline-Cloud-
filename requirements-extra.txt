@@ -1,0 +1,5 @@
+# Dépendances optionnelles (plus lourdes) — pour aller chercher des points bonus.
+# À installer seulement si tu veux la version "vitrine" :
+#   pip install -r requirements-extra.txt
+great-expectations>=0.18,<1.0   # tests de qualité documentés (vitrine, en plus de quality/checks.py)
+mlflow>=2.16.0                   # versionnement / tracking du modèle ML (bonus)

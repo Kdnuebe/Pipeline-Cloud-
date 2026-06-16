@@ -1,0 +1,32 @@
+# Données & artefacts (ne pas versionner)
+data/
+*.parquet
+*.duckdb
+mlruns/
+build/
+*.zip
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Terraform
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+
+# Sorties de déploiement (contiennent des ARNs / l'ID de compte)
+cloud_simple/deploy_outputs.json
+policy_tmp.json
+sm_tmp.json
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
