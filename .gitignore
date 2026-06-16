@@ -25,8 +25,9 @@ cloud_simple/deploy_outputs.json
 policy_tmp.json
 sm_tmp.json
 
-# OS / IDE
+# OS / IDE / outils
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+.claude/
