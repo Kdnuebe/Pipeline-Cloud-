@@ -1,4 +1,4 @@
-# 🚕 Pipeline Data Médaillon — NYC Yellow Taxi (AWS, version simple)
+# Pipeline Data Médaillon — NYC Yellow Taxi (AWS, version simple)
 
 Pipeline de données **Bronze → Silver → Gold** : du fichier brut jusqu'aux tableaux de bord, avec
 qualité, ML, sécurité/RGPD et analyse des coûts. Conçu pour être **simple, maîtrisable et présentable**
