@@ -25,6 +25,19 @@ cloud_simple/deploy_outputs.json
 policy_tmp.json
 sm_tmp.json
 
+# Perso / livrables gardés en LOCAL (non publiés)
+docs/video_script.md
+docs/rapport/
+docs/RAPPORT_COMPLET.md
+docs/RAPPORT_COMPLET.docx
+docs/diagrams/
+docs/build_docx.py
+cloud_simple/proof/
+M2_Projet_Pipeline_Cloud (1).pdf
+
+# Version avancée gardée en LOCAL (non publiée)
+avance_optionnel/
+
 # OS / IDE / outils
 .DS_Store
 Thumbs.db

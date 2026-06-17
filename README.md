@@ -1,61 +1,63 @@
-# Pipeline Data Médaillon — NYC Yellow Taxi (AWS, version simple)
+# Pipeline Data Médaillon — NYC Yellow Taxi (AWS)
 
-Pipeline de données **Bronze → Silver → Gold** : du fichier brut jusqu'aux tableaux de bord, avec
-qualité, ML, sécurité/RGPD et analyse des coûts. Conçu pour être **simple, maîtrisable et présentable**
-(soutenance de mémoire), et pour valider les **Blocs 2 & 3**.
+Pipeline de données **Bronze → Silver → Gold** : du fichier brut jusqu'aux datamarts, à une API REST,
+un dashboard et un modèle de Machine Learning. Conçue pour être **simple, gratuite à développer, et
+déployable sur AWS** (S3 + Athena + Step Functions), sans Terraform.
 
-> 👉 **Commence ici : [docs/00_GUIDE_PAS_A_PAS.md](docs/00_GUIDE_PAS_A_PAS.md)**
-> 👉 **Pour le jury : [docs/rapport/00_resume_executif.md](docs/rapport/00_resume_executif.md)** (vulgarisé)
-> 👉 **Validation des blocs : [docs/rapport/00_mapping_competences.md](docs/rapport/00_mapping_competences.md)**
+> 📖 **Guide pas-à-pas complet → [docs/00_GUIDE_PAS_A_PAS.md](docs/00_GUIDE_PAS_A_PAS.md)**
 
-## Le cloud en services simples
-| Service AWS | Rôle (1 phrase) |
+## Le cloud en 3 services simples
+| Service AWS | Rôle |
 |---|---|
-| **Amazon S3** | le « disque dur du cloud » : stocke bronze/silver/gold |
-| **Amazon Athena** | exécute du **SQL** sur les fichiers S3, sans serveur (le traitement cloud) |
-| **AWS Step Functions** | **orchestre** les transformations Athena (graphe visuel + alerte) — créé à la console |
+| **Amazon S3** | stocke les fichiers (bronze/silver/gold), chiffrés |
+| **Amazon Athena** | exécute du **SQL** sur S3, sans serveur (le traitement) |
+| **AWS Step Functions** | **orchestre** les transformations (graphe visuel + alerte email) |
 
-*(Pas de Terraform, pas de Glue, pas de Lambda. La version pleinement « industrialisée » est rangée
-dans `avance_optionnel/` — à mentionner en soutenance, pas à déployer.)*
-
-## Ce qui marche déjà (validé en local sur données réelles)
-- **2 964 624** courses ingérées (2024-01) + zones + météo
-- Nettoyage/jointures/RGPD → **2 717 423** lignes silver · datamarts gold
-- **ML : MAE 3,09 $ vs 13,96 $ baseline (−77,8 %), R² 0,92**
-- Qualité **9/9 tests** · API (FastAPI) + Dashboard (Streamlit)
-
-## Démarrage rapide (local, gratuit)
-```powershell
+## Démarrage rapide — en local (gratuit, ~2 min)
+```bash
 python -m venv .venv
-.\.venv\Scripts\activate
+# Windows :  .\.venv\Scripts\activate   |  macOS/Linux :  source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env
-python run_local_pipeline.py 2024-01     # toute la pipeline (~2 min)
-streamlit run dashboard/app.py           # dashboard
-uvicorn api.app:app --reload             # API + Swagger (/docs)
+cp .env.example .env                      # Windows : copy .env.example .env
+
+python run_local_pipeline.py 2024-01      # toute la pipeline : bronze → silver → gold → qualité → ML
+streamlit run dashboard/app.py            # dashboard      → http://localhost:8501
+uvicorn api.app:app --reload              # API + Swagger  → http://localhost:8000/docs
 ```
 
-## Cloud (S3 + Athena + Step Functions) — résumé
-1. `aws s3 cp data/bronze s3://VOTRE-BUCKET/bronze --recursive`
-2. Dans Athena, exécuter `cloud_simple/athena/01` (tables bronze), puis `04` (exploration).
-3. Orchestrer `silver → gold` avec **Step Functions** (`cloud_simple/stepfunctions/README.md`) —
-   ou lancer `02`/`03` à la main dans Athena.
-→ détails dans le guide.
+## Déploiement sur AWS
+Après `aws configure`, **tout se déploie en une commande** :
+```bash
+python cloud_simple/deploy.py --email votre@email.com
+```
+Cela crée le bucket S3, charge les données, construit silver/gold via **Athena**, orchestré par
+**Step Functions**, et met en place les alertes. Détails (et version manuelle à la console) dans le
+[guide](docs/00_GUIDE_PAS_A_PAS.md). Pour tout supprimer : `python cloud_simple/teardown.py`.
+
+## Ce que fait la pipeline
+- **~3 M lignes/mois** ingérées (taxi + zones + météo), nettoyées et enrichies
+- **Datamarts** : demande par zone/heure, analyse des pourboires, prédictions ML
+- **ML** : estimation du prix d'une course (erreur ~4× plus faible qu'une baseline) + détection d'anomalies
+- **Qualité** : 9 tests automatisés · **RGPD** : pseudonymisation + k-anonymat · **FinOps** : ~0 €
 
 ## Structure
 ```
-data_ingestion/   Bronze (ingest.py)
-transformations/  SQL portable (DuckDB local) + run_local.py
-quality/          Tests de qualité (checks.py)
-ml/               Bonus ML (train_score.py)
-api/              API REST (FastAPI) + openapi.yaml
-dashboard/        Dashboard Streamlit
-cloud_simple/     ☁️ Scripts Athena + lifecycle (la version simple à présenter)
-finops/           Calculateur de coûts
-docs/             Guide + rapport (résumé exécutif, mapping blocs, 9 sections) + diagramme + script vidéo
-avance_optionnel/ Version industrialisée (Terraform/Glue/Step Functions) — NON requise
+data_ingestion/      Bronze : ingestion des données brutes
+transformations/     Silver & Gold : SQL (DuckDB en local, Athena dans le cloud)
+quality/             Tests de qualité des données
+ml/                  Modèle de Machine Learning
+api/                 API REST (FastAPI) + spec OpenAPI
+dashboard/           Tableau de bord (Streamlit)
+cloud_simple/        Déploiement AWS : scripts Athena, Step Functions, deploy.py / teardown.py
+finops/              Estimation des coûts
+tests/               Tests automatisés (lancés par la CI)
+run_local_pipeline.py  Orchestrateur local (enchaîne toutes les étapes)
+docs/                Guide pas-à-pas + diagramme d'architecture
 ```
 
-## Coût
-Local : **0 €**. Cloud (S3 + Athena, démo) : **quelques centimes** (voir [docs/rapport/07_finops.md](docs/rapport/07_finops.md)).
-```
+## Stack technique
+Python · Amazon S3 · Amazon Athena · AWS Step Functions · Amazon SNS · AWS IAM · DuckDB · Parquet ·
+pandas · scikit-learn · FastAPI · Streamlit · Docker · GitHub Actions.
+
+## Licence / contexte
+Projet pédagogique (Master 2 Data Engineering). Données : NYC TLC (open data) + Open-Meteo.

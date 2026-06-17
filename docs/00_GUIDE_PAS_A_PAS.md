@@ -1,8 +1,9 @@
 # 🧭 Guide pas-à-pas (version SIMPLE — à maîtriser de A à Z)
 
-Ce guide te mène de zéro au rendu complet, **sans Terraform ni outil compliqué**. Le cloud se
-limite à **2 services faciles : S3 (stockage) et Athena (SQL)**. Tout se fait dans la **console
-AWS** (visuel) + quelques commandes simples. Tu comprends et pilotes chaque étape.
+Ce guide mène de zéro à un projet qui tourne, **sans Terraform ni outil compliqué**. Le cloud se
+limite à des services simples : **S3** (stockage), **Athena** (SQL) et **Step Functions**
+(orchestration). Tout se fait dans la **console AWS** + quelques commandes — ou en **une seule commande**
+automatisée (voir Partie 5).
 
 **Plan :**
 - [Partie 0 — Installer](#p0)
@@ -11,10 +12,15 @@ AWS** (visuel) + quelques commandes simples. Tu comprends et pilotes chaque éta
 - [Partie 3 — Préparer AWS (compte + accès)](#p3)
 - [Partie 4 — S3 : stocker dans le cloud](#p4)
 - [Partie 5 — Athena : transformer dans le cloud (SQL)](#p5)
+- [Partie 5 bis — Orchestrer avec Step Functions](#p5bis)
 - [Partie 6 — Sécurité & RGPD](#p6)
 - [Partie 7 — Coûts & nettoyage](#p7)
-- [Partie 8 — Rapport & vidéo](#p8)
 - [Dépannage](#depannage)
+
+> ⚡ **Le plus rapide (tout automatisé)** : après `aws configure`, une seule commande déploie tout
+> (S3 + Athena + Step Functions + exécution) :
+> `python cloud_simple/deploy.py --email ton@email.com`. Les parties 4 et 5 ci-dessous détaillent
+> la version manuelle (utile pour comprendre et faire des captures).
 
 ---
 
@@ -60,8 +66,7 @@ uvicorn api.app:app --reload              # http://localhost:8000/docs  (Swagger
 ```
 **Captures :** les 3 onglets du dashboard + la page Swagger `/docs`.
 
-> L'API tourne en local : c'est suffisant pour la démo et tu sais l'expliquer. (La version
-> « API déployée sur AWS Lambda » est dans `avance_optionnel/`, optionnelle.)
+> L'API tourne en local : c'est suffisant pour la démo et facile à expliquer.
 
 ---
 
@@ -140,19 +145,40 @@ indicateur de **coût** et de **performance**. C'est ton optimisation FinOps (Pa
 
 ## <a name="p5bis"></a>Partie 5 bis — Orchestrer avec Step Functions (recommandé)
 
-Au lieu de lancer les scripts Athena `02`/`03` à la main, tu peux les faire enchaîner
-**automatiquement** par **AWS Step Functions** (l'orchestrateur cité dans le sujet). Tu obtiens un
-**graphe visuel** qui passe au vert — excellent pour la soutenance.
+Au lieu de lancer les scripts Athena `02`/`03` à la main, **AWS Step Functions** les enchaîne
+**automatiquement** (l'orchestrateur cité dans le sujet). Tu obtiens un **graphe visuel** qui passe au
+vert, et une **alerte email** en cas d'échec.
 
-- Pré-requis : avoir exécuté `01_create_bronze_tables.sql` (tables bronze créées) et avoir les
-  dossiers `silver/` et `gold/` **vides**.
-- Tout est expliqué (console **ou** 4 commandes CLI) dans **`cloud_simple/stepfunctions/README.md`**.
-- En bonus, ça **démontre l'alerte d'échec** : si une étape échoue, tu reçois un **email** (SNS).
+**Pré-requis :** avoir exécuté `01_create_bronze_tables.sql` (tables bronze créées) et avoir les
+dossiers `silver/` et `gold/` **vides**.
 
-**Capture :** le graphe d'exécution Step Functions au vert (Silver → Gold).
+Mise en place en quelques commandes (remplace `VOTRE-BUCKET` et ton email) :
+```powershell
+$BUCKET="VOTRE-BUCKET"; $EMAIL="ton@email.com"
+$ACCOUNT=(aws sts get-caller-identity --query Account --output text)
 
-> C'est optionnel : si tu manques de temps, les scripts Athena `02`/`03` à la main suffisent. Mais
-> Step Functions vaut vraiment le coup pour la note « orchestration » et pour l'effet en soutenance.
+# 1) Topic SNS d'alerte + abonnement (clique le lien reçu par email !)
+$TOPIC=(aws sns create-topic --name nyc-taxi-alerts --query TopicArn --output text)
+aws sns subscribe --topic-arn $TOPIC --protocol email --notification-endpoint $EMAIL
+
+# 2) Rôle IAM pour Step Functions
+aws iam create-role --role-name nyc-taxi-sfn-role --assume-role-policy-document file://cloud_simple/stepfunctions/iam_trust.json
+(Get-Content cloud_simple/stepfunctions/iam_policy.json) -replace "VOTRE-BUCKET",$BUCKET -replace "VOTRE_SNS_TOPIC_ARN",$TOPIC | Set-Content policy_tmp.json
+aws iam put-role-policy --role-name nyc-taxi-sfn-role --policy-name perms --policy-document file://policy_tmp.json
+$ROLE="arn:aws:iam::$($ACCOUNT):role/nyc-taxi-sfn-role"
+
+# 3) Créer puis lancer la state machine
+(Get-Content cloud_simple/stepfunctions/state_machine.asl.json) -replace "VOTRE-BUCKET",$BUCKET -replace "VOTRE_SNS_TOPIC_ARN",$TOPIC | Set-Content sm_tmp.json
+$SM=(aws stepfunctions create-state-machine --name nyc-taxi-pipeline --definition file://sm_tmp.json --role-arn $ROLE --query stateMachineArn --output text)
+aws stepfunctions start-execution --state-machine-arn $SM
+```
+Puis regarde le **graphe** dans la console Step Functions (Silver → Gold) passer au vert.
+
+**Capture :** le graphe d'exécution Step Functions au vert.
+
+> 💡 Tout ceci (et les parties 4-5) est fait **en une commande** par `python cloud_simple/deploy.py
+> --email ton@email.com`. Pour relancer la state machine : supprime les tables silver/gold et vide
+> leurs dossiers S3 (voir Dépannage).
 
 ---
 
@@ -164,7 +190,6 @@ Au lieu de lancer les scripts Athena `02`/`03` à la main, tu peux les faire enc
   seulement). Explique le principe du **moindre privilège**.
 - **RGPD dans la donnée** : ouvre `silver_trips` dans Athena → la colonne `driver_pseudo` est
   **hachée** (pas d'email en clair) ; les datamarts gold appliquent le **k-anonymat** (≥ 5 courses).
-- Détails complets : `docs/rapport/08_rgpd.md`.
 
 **Capture :** la table `silver_trips` (colonne `driver_pseudo` hachée, pas de `driver_email`).
 
@@ -172,30 +197,13 @@ Au lieu de lancer les scripts Athena `02`/`03` à la main, tu peux les faire enc
 
 ## <a name="p7"></a>Partie 7 — Coûts & nettoyage
 
-- **Coûts réels** : Console → **Billing / Cost Explorer** (le lendemain). Relève le montant (quelques
-  centimes) et reporte-le dans `docs/rapport/07_finops.md`.
+- **Coûts réels** : Console → **Billing / Cost Explorer** (le lendemain) — quelques centimes.
 - **Estimation** : `python finops/cost_calculator.py`.
 - **Nettoyer** (pour ne plus rien payer) quand tu as fini :
   ```powershell
   aws s3 rb s3://VOTRE-BUCKET --force      # supprime le bucket et son contenu
   ```
   (Dans Athena, tu peux aussi faire `DROP DATABASE nyc_taxi CASCADE;`.)
-
----
-
-## <a name="p8"></a>Partie 8 — Rapport & vidéo
-
-### Rapport (lisible par un non-technique)
-Assemble dans l'ordre, dans Google Docs / Word :
-1. `docs/rapport/00_resume_executif.md` ← **commence par ça** (vulgarisé, pour le jury non-technique)
-2. `00_mapping_competences.md` ← prouve la validation des **Blocs 2 & 3**
-3. Sections `01` → `09` (détail technique)
-4. Insère le **diagramme** (`docs/architecture.mmd` rendu sur https://mermaid.live → PNG)
-5. Insère tes **captures** (Parties 1, 2, 4, 5, 6) + tes **coûts réels** (Partie 7)
-6. Exporte en PDF.
-
-### Vidéo (10-15 min)
-Suis `docs/video_script.md`.
 
 ---
 
